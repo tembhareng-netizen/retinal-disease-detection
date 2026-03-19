@@ -126,7 +126,7 @@ export default function App() {
       window._registeredDoctors = window._registeredDoctors || [];
       window._registeredDoctors.push({ name: regName, email: regEmail, _pwd: regPass, specialization: regSpecialization });
     }
-    setLoginSuccess("Account created successfully! You can now sign in.");
+    setLoginSuccess("Account created successfully! You can now sign in into your account.");
     setTimeout(() => { switchMode("signin"); }, 2000);
   };
 
@@ -677,7 +677,7 @@ export default function App() {
           </div>
 
           {/* PATIENT REPORTS */}
-          {doctorTab === "patients" && (
+          {doctorTab === "Patients" && (
             <div className="fade-up" style={{ display: "grid", gridTemplateColumns: selPatient ? "1fr 1.5fr" : "1fr", gap: 24 }}>
               <div>
                 <div style={S.card}>

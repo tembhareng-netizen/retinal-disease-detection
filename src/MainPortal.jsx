@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 
 const DEMO_PATIENTS = [
   {
-    id: "P001", name: "Sarah Mitchell", age: 34, email: "sarah@email.com",
+    id: "P001", name: "Sarah Mateo", age: 34, email: "sarah@email.com",
     reports: [
       { id: "R001", date: "2026-02-15", image: null, diagnosis: "Diabetic Retinopathy - Stage 2", confidence: 87, risk: "Moderate", findings: "Microaneurysms detected in superior temporal quadrant. Mild hard exudates present. No neovascularization observed.", doctorNote: "Recommend follow-up in 3 months. Continue current medication regimen." },
       { id: "R004", date: "2025-11-10", image: null, diagnosis: "Normal Retina", confidence: 96, risk: "Low", findings: "No abnormalities detected. Optic disc appears healthy. Macula and vessels within normal parameters.", doctorNote: "All clear. Next routine scan in 6 months." },
