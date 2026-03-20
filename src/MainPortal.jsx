@@ -1,681 +1,357 @@
 import { useState, useRef } from "react";
 
-const DEMO_PATIENTS = [
-  {
-    id: "P001", name: "Sarah Mateo", age: 34, email: "sarah@email.com",
-    reports: [
-      { id: "R001", date: "2026-02-15", image: null, diagnosis: "Diabetic Retinopathy - Stage 2", confidence: 87, risk: "Moderate", findings: "Microaneurysms detected in superior temporal quadrant. Mild hard exudates present. No neovascularization observed.", doctorNote: "Recommend follow-up in 3 months. Continue current medication regimen." },
-      { id: "R004", date: "2025-11-10", image: null, diagnosis: "Normal Retina", confidence: 96, risk: "Low", findings: "No abnormalities detected. Optic disc appears healthy. Macula and vessels within normal parameters.", doctorNote: "All clear. Next routine scan in 6 months." },
-    ]
-  },
-  {
-    id: "P002", name: "James Thornton", age: 52, email: "james@email.com",
-    reports: [
-      { id: "R003", date: "2026-01-22", image: null, diagnosis: "Glaucoma Suspect", confidence: 78, risk: "High", findings: "Cup-to-disc ratio elevated at 0.7. Suspicious for early glaucomatous changes. Asymmetry noted between eyes.", doctorNote: "Urgent referral to glaucoma specialist. IOP measurement needed." },
-    ]
-  }
+// ─── AI Bank ──────────────────────────────────────────────
+const AI_BANK = [
+  { diagnosis: "Diabetic Retinopathy", stage: "Stage 1", confidence: 82, risk: "Moderate", findings: "Early microaneurysms detected. Mild vascular changes in peripheral retina. No significant exudates present." },
+  { diagnosis: "Normal Retina",        stage: "N/A",     confidence: 94, risk: "Low",      findings: "Retinal examination within normal limits. Healthy optic nerve. No lesions or abnormalities detected." },
+  { diagnosis: "Macular Degeneration", stage: "Dry AMD", confidence: 71, risk: "High",     findings: "Drusen deposits visible near macula. Geographic atrophy suspected. Immediate specialist consultation advised." },
+  { diagnosis: "Glaucoma",             stage: "Suspect", confidence: 78, risk: "High",     findings: "Cup-to-disc ratio elevated. Asymmetry noted. IOP measurement and visual field testing strongly advised." },
+  { diagnosis: "Diabetic Retinopathy", stage: "Stage 2", confidence: 85, risk: "Moderate", findings: "Multiple microaneurysms and hard exudates identified. Moderate non-proliferative changes detected." },
 ];
 
-const DEMO_DOCTOR = { id: "D001", name: "Dr. Elena Vasquez", specialization: "Ophthalmologist", email: "dr.vasquez@clinic.com" };
-
 const RISK_COLORS = { Low: "#00d4aa", Moderate: "#f5a623", High: "#e84040" };
-const RISK_BG = { Low: "rgba(0,212,170,0.15)", Moderate: "rgba(245,166,35,0.15)", High: "rgba(232,64,64,0.15)" };
+const RISK_BG     = { Low: "rgba(0,212,170,0.15)", Moderate: "rgba(245,166,35,0.15)", High: "rgba(232,64,64,0.15)" };
 
-export default function App() {
-  const [screen, setScreen] = useState("login");
-  const [role, setRole] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [patients, setPatients] = useState(DEMO_PATIENTS);
-  const [loginRole, setLoginRole] = useState("patient");
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPass, setLoginPass] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginSuccess, setLoginSuccess] = useState("");
-  // Auth mode: "signin" | "register"
-  const [authMode, setAuthMode] = useState("signin");
-  // Register fields
-  const [regName, setRegName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPass, setRegPass] = useState("");
-  const [regConfirm, setRegConfirm] = useState("");
-  const [regAge, setRegAge] = useState("");
-  const [regGender, setRegGender] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regSpecialization, setRegSpecialization] = useState("");
-  const [regLicense, setRegLicense] = useState("");
-  const [regHospital, setRegHospital] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [patientTab, setPatientTab] = useState("upload");
-  const [doctorTab, setDoctorTab] = useState("patients");
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [uploadedImage, setUploadedImage] = useState(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [messageText, setMessageText] = useState("");
-  const [messageSent, setMessageSent] = useState(false);
+// ── Canvas: Laplacian Edge Detection ─────────────────────
+function applyLaplacian(imgSrc, cb) {
+  const img = new Image(); img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height);
+    const src = new Uint8ClampedArray(d.data);
+    const kern = [0, -1, 0, -1, 4, -1, 0, -1, 0];
+    const out = new Uint8ClampedArray(d.data.length);
+    const w = c.width;
+    for (let y = 1; y < c.height - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        let r = 0, g = 0, b = 0;
+        for (let ky = -1; ky <= 1; ky++) for (let kx = -1; kx <= 1; kx++) {
+          const i = ((y + ky) * w + (x + kx)) * 4;
+          const k = kern[(ky + 1) * 3 + (kx + 1)];
+          r += src[i] * k; g += src[i + 1] * k; b += src[i + 2] * k;
+        }
+        const i = (y * w + x) * 4;
+        out[i] = Math.min(255, Math.abs(r));
+        out[i + 1] = Math.min(255, Math.abs(g));
+        out[i + 2] = Math.min(255, Math.abs(b));
+        out[i + 3] = 255;
+      }
+    }
+    d.data.set(out); ctx.putImageData(d, 0, 0); cb(c.toDataURL());
+  };
+  img.src = imgSrc;
+}
+
+// ── Canvas: Grad-CAM Heatmap Simulation ──────────────────
+function applyGradCAM(imgSrc, cb) {
+  const img = new Image(); img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
+    const cx = c.width * 0.48, cy = c.height * 0.44;
+    const r1 = Math.min(c.width, c.height) * 0.20;
+    const r2 = Math.min(c.width, c.height) * 0.40;
+    const g1 = ctx.createRadialGradient(cx, cy, r1 * 0.1, cx, cy, r1);
+    g1.addColorStop(0, "rgba(255,40,0,0.75)");
+    g1.addColorStop(0.5, "rgba(255,140,0,0.45)");
+    g1.addColorStop(1, "rgba(255,220,0,0.15)");
+    ctx.fillStyle = g1; ctx.fillRect(0, 0, c.width, c.height);
+    const g2 = ctx.createRadialGradient(cx * 1.12, cy * 0.88, r2 * 0.05, cx * 1.12, cy * 0.88, r2);
+    g2.addColorStop(0, "rgba(255,180,0,0.28)");
+    g2.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, c.width, c.height);
+    cb(c.toDataURL());
+  };
+  img.src = imgSrc;
+}
+
+// ─── Shared helpers ───────────────────────────────────────
+const riskBadge = (risk, sm = false) => ({
+  display: "inline-flex", alignItems: "center", gap: sm ? 4 : 6,
+  padding: sm ? "3px 10px" : "6px 14px", borderRadius: 20,
+  background: RISK_BG[risk] || "rgba(255,255,255,0.1)",
+  border: `1px solid ${RISK_COLORS[risk] || "#fff"}40`,
+  color: RISK_COLORS[risk] || "#fff",
+  fontSize: sm ? 11 : 13, fontWeight: 700,
+});
+const confColor = (n) => n >= 90 ? "#00d4aa" : n >= 70 ? "#f5a623" : "#e84040";
+const confBar   = (pct) => ({
+  height: 8, borderRadius: 4,
+  background: `linear-gradient(90deg, #00b4ff ${pct}%, rgba(255,255,255,0.06) ${pct}%)`,
+});
+
+// ─── Main Portal ──────────────────────────────────────────
+export default function MainPortal({ screen, currentUser, patients, setPatients, logout }) {
+  // Patient tabs: reports | messages
+  const [patientTab,    setPatientTab]    = useState("reports");
+
+  // Doctor tabs: patients | analyze | message
+  const [doctorTab,     setDoctorTab]     = useState("patients");
+  const [selectedPid,   setSelectedPid]   = useState(null);
+
+  // Doctor analyze state
+  const [uploadedImg,   setUploadedImg]   = useState(null);
+  const [edgeImg,       setEdgeImg]       = useState(null);
+  const [gradcamImg,    setGradcamImg]    = useState(null);
+  const [analyzing,     setAnalyzing]     = useState(false);
+  const [aiResult,      setAiResult]      = useState(null);
+  const [vizTab,        setVizTab]        = useState("original");
+  const [doctorNote,    setDoctorNote]    = useState("");
+  const [prescription,  setPrescription]  = useState("");
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reportSent,    setReportSent]    = useState(false);
+
+  // Messaging
+  const [msgText,  setMsgText]  = useState("");
+  const [msgSent,  setMsgSent]  = useState(false);
   const [messages, setMessages] = useState({});
+
   const fileRef = useRef();
 
-  const resetAuthFields = () => {
-    setLoginEmail(""); setLoginPass(""); setLoginError(""); setLoginSuccess("");
-    setRegName(""); setRegEmail(""); setRegPass(""); setRegConfirm("");
-    setRegAge(""); setRegGender(""); setRegPhone("");
-    setRegSpecialization(""); setRegLicense(""); setRegHospital("");
-    setShowPass(false);
-  };
-
-  const switchMode = (mode) => { resetAuthFields(); setAuthMode(mode); };
-  const switchRole = (r) => { resetAuthFields(); setLoginRole(r); };
-
-  const handleLogin = () => {
-    setLoginError("");
-    if (loginRole === "patient") {
-      const found = patients.find(p => p.email === loginEmail);
-      const validPass = found && (found._pwd ? loginPass === found._pwd : loginPass === "patient123");
-      if (found && validPass) {
-        setCurrentUser(found); setRole("patient"); setScreen("patient");
-      } else {
-        setLoginError("Invalid credentials.");
-      }
-    } else {
-      // Check demo doctor or registered doctors
-      const regDoctors = window._registeredDoctors || [];
-      const regDoc = regDoctors.find(d => d.email === loginEmail && d._pwd === loginPass);
-      if (loginEmail === DEMO_DOCTOR.email && loginPass === "doctor123") {
-        setCurrentUser(DEMO_DOCTOR); setRole("doctor"); setScreen("doctor");
-      } else if (regDoc) {
-        setCurrentUser({ id: "D" + Date.now(), name: regDoc.name, specialization: regDoc.specialization, email: regDoc.email });
-        setRole("doctor"); setScreen("doctor");
-      } else {
-        setLoginError("Invalid credentials. Try dr.vasquez@clinic.com / doctor123");
-      }
-    }
-  };
-
-  const handleRegister = () => {
-    setLoginError(""); setLoginSuccess("");
-    if (!regName.trim()) return setLoginError("Full name is required.");
-    if (!regEmail.trim() || !/^\S+@\S+\.\S+$/.test(regEmail)) return setLoginError("Enter a valid email address.");
-    if (regPass.length < 6) return setLoginError("Password must be at least 6 characters.");
-    if (regPass !== regConfirm) return setLoginError("Passwords do not match.");
-    if (loginRole === "patient" && !regAge) return setLoginError("Age is required.");
-    if (loginRole === "doctor" && !regSpecialization.trim()) return setLoginError("Specialization is required.");
-    const existing = patients.find(p => p.email === regEmail);
-    if (existing) return setLoginError("An account with this email already exists.");
-    if (loginRole === "patient") {
-      const newPatient = {
-        id: "P" + Date.now(), name: regName, age: parseInt(regAge), email: regEmail,
-        gender: regGender, phone: regPhone, _pwd: regPass, reports: []
-      };
-      setPatients(prev => [...prev, newPatient]);
-    } else {
-      // Store doctor credentials for demo
-      window._registeredDoctors = window._registeredDoctors || [];
-      window._registeredDoctors.push({ name: regName, email: regEmail, _pwd: regPass, specialization: regSpecialization });
-    }
-    setLoginSuccess("Account created successfully! You can now sign in.");
-    setTimeout(() => { switchMode("signin"); }, 2000);
-  };
-
+  // ── Doctor helpers ─────────────────────────────────────
   const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => setUploadedImage(ev.target.result);
+    reader.onload = ev => {
+      setUploadedImg(ev.target.result);
+      setEdgeImg(null); setGradcamImg(null); setAiResult(null);
+      setReportSent(false); setVizTab("original");
+    };
     reader.readAsDataURL(file);
-    setAnalysisResult(null);
   };
 
   const runAnalysis = () => {
-    if (!uploadedImage) return;
-    setAnalyzing(true);
+    if (!uploadedImg || !selectedPid) return;
+    setAnalyzing(true); setEdgeImg(null); setGradcamImg(null); setAiResult(null);
+    applyLaplacian(uploadedImg, edge => {
+      setEdgeImg(edge);
+      applyGradCAM(uploadedImg, gcam => {
+        setGradcamImg(gcam);
+        setTimeout(() => {
+          setAiResult(AI_BANK[Math.floor(Math.random() * AI_BANK.length)]);
+          setAnalyzing(false); setVizTab("original");
+        }, 400);
+      });
+    });
+  };
+
+  const sendReportToPatient = () => {
+    if (!aiResult || !selectedPid || !doctorNote.trim()) return;
+    setSendingReport(true);
     setTimeout(() => {
-      const results = [
-        { diagnosis: "Diabetic Retinopathy - Stage 1", confidence: 82, risk: "Moderate", findings: "Early microaneurysms detected. Mild vascular changes in peripheral retina. No significant exudates present." },
-        { diagnosis: "Normal Retina", confidence: 94, risk: "Low", findings: "Retinal examination within normal limits. Healthy optic nerve. No lesions or abnormalities detected." },
-        { diagnosis: "Age-Related Macular Degeneration", confidence: 71, risk: "High", findings: "Drusen deposits visible near macula. Geographic atrophy suspected. Immediate specialist consultation advised." },
-      ];
-      const r = results[Math.floor(Math.random() * results.length)];
-      const newReport = {
+      const report = {
         id: "R" + Date.now(),
         date: new Date().toISOString().split("T")[0],
-        image: uploadedImage,
-        ...r,
-        doctorNote: null
+        originalImage: uploadedImg, edgeImage: edgeImg, gradcamImage: gradcamImg,
+        diagnosis: aiResult.diagnosis, stage: aiResult.stage,
+        confidence: aiResult.confidence, risk: aiResult.risk,
+        findings: aiResult.findings, doctorNote, prescription, sentByDoctor: true,
       };
-      setAnalysisResult(newReport);
-      setPatients(prev => prev.map(p =>
-        p.id === currentUser.id ? { ...p, reports: [newReport, ...p.reports] } : p
-      ));
-      setCurrentUser(prev => ({ ...prev, reports: [newReport, ...prev.reports] }));
-      setAnalyzing(false);
-    }, 3000);
+      setPatients(prev => prev.map(p => p.id === selectedPid ? { ...p, reports: [report, ...p.reports] } : p));
+      setSendingReport(false); setReportSent(true);
+    }, 1200);
   };
 
-  const sendMessage = (patientId) => {
-    if (!messageText.trim()) return;
-    setMessages(prev => ({
-      ...prev,
-      [patientId]: [...(prev[patientId] || []), {
-        from: "doctor", text: messageText, time: new Date().toLocaleTimeString()
-      }]
-    }));
-    setMessageText("");
-    setMessageSent(true);
-    setTimeout(() => setMessageSent(false), 3000);
+  const sendMessage = (pid) => {
+    if (!msgText.trim()) return;
+    setMessages(prev => ({ ...prev, [pid]: [...(prev[pid] || []), { from: "doctor", text: msgText, time: new Date().toLocaleTimeString() }] }));
+    setMsgText(""); setMsgSent(true); setTimeout(() => setMsgSent(false), 3000);
   };
 
-  const logout = () => {
-    setScreen("login"); setRole(null); setCurrentUser(null);
-    setUploadedImage(null); setAnalysisResult(null);
-    setLoginEmail(""); setLoginPass(""); setLoginError(""); setLoginSuccess("");
-    setAuthMode("signin"); setShowPass(false);
-    setPatientTab("upload"); setDoctorTab("patients");
-    setSelectedPatient(null);
+  const resetAnalyze = () => {
+    setUploadedImg(null); setEdgeImg(null); setGradcamImg(null);
+    setAiResult(null); setReportSent(false); setDoctorNote(""); setPrescription("");
   };
 
-  // STYLES
- const S = {
-    app: { width: "100vw", Height: "100vh", background: "#030b1a", fontFamily: "'DM Sans', sans-serif", color: "#e8eef8", overflowX: "hidden" },
-    loginWrap: { width: "100vw", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(ellipse at 30% 50%, #0a1f3d 0%, #030b1a 70%)", position: "relative", overflow: "hidden" },
-    loginCard: { background: "rgba(10,24,50,0.9)", border: "1px solid rgba(0,180,255,0.2)", borderRadius: 20, padding: "48px 44px", width: 420, backdropFilter: "blur(20px)", boxShadow: "0 0 80px rgba(0,120,255,0.15), 0 24px 48px rgba(0,0,0,0.6)", position: "relative", zIndex: 2 },
-    logo: { textAlign: "center", marginBottom: 32 },
-    logoTitle: { fontSize: 26, fontWeight: 800, background: "linear-gradient(135deg, #00b4ff, #00d4aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: -0.5 },
-    logoSub: { fontSize: 12, color: "#4a6fa5", letterSpacing: 3, textTransform: "uppercase", marginTop: 4 },
-    roleToggle: { display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 4, marginBottom: 28, gap: 4 },
-    roleBtn: (active) => ({ flex: 1, padding: "10px 0", border: "none", borderRadius: 9, fontWeight: 600, fontSize: 14, cursor: "pointer", transition: "all 0.3s", background: active ? "linear-gradient(135deg, #0066cc, #00a3cc)" : "transparent", color: active ? "#fff" : "#4a6fa5", boxShadow: active ? "0 4px 12px rgba(0,120,255,0.3)" : "none" }),
-    input: { width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(0,180,255,0.15)", borderRadius: 10, padding: "13px 16px", color: "#e8eef8", fontSize: 14, marginBottom: 14, outline: "none", boxSizing: "border-box", transition: "border 0.2s" },
-    loginBtn: { width: "100%", padding: "14px", background: "linear-gradient(135deg, #0066cc, #00c4aa)", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer", marginTop: 8, boxShadow: "0 8px 24px rgba(0,120,200,0.4)", transition: "transform 0.15s, box-shadow 0.15s" },
-    error: { background: "rgba(232,64,64,0.15)", border: "1px solid rgba(232,64,64,0.4)", borderRadius: 8, padding: "10px 14px", color: "#ff6b6b", fontSize: 13, marginBottom: 14 },
-    hint: { color: "#3a5a8a", fontSize: 12, textAlign: "center", marginTop: 16 },
-    // Dashboard common
-    dash: { width: "100vw", minHeight: "100vh", background: "#030b1a", display: "flex", flexDirection: "column", overflowX: "hidden" },
-    header: { width: "100%", background: "rgba(5,15,35,0.95)", borderBottom: "1px solid rgba(0,180,255,0.12)", padding: "0 40px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(10px)", position: "sticky", top: 0, zIndex: 100 },
-    headerLeft: { display: "flex", alignItems: "center", gap: 12 },
-    pulse: { width: 10, height: 10, borderRadius: "50%", background: "#00d4aa", boxShadow: "0 0 10px #00d4aa", animation: "pulse 2s infinite" },
-    headerTitle: { fontSize: 18, fontWeight: 700, background: "linear-gradient(135deg, #00b4ff, #00d4aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-    userChip: { display: "flex", alignItems: "center", gap: 10, background: "rgba(0,180,255,0.08)", border: "1px solid rgba(0,180,255,0.2)", borderRadius: 30, padding: "6px 14px 6px 6px" },
-    avatar: (color) => ({ width: 32, height: 32, borderRadius: "50%", background: color || "linear-gradient(135deg, #0066cc, #00c4aa)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#fff" }),
-    logoutBtn: { background: "rgba(232,64,64,0.15)", border: "1px solid rgba(232,64,64,0.3)", borderRadius: 8, padding: "6px 14px", color: "#ff6b6b", cursor: "pointer", fontSize: 13, fontWeight: 600 },
-    content: { padding: "32px 40px", width: "100%", flex: 1 },
-    // Tabs
-    tabs: { display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 5, marginBottom: 32, width: "fit-content" },
-    tab: (active) => ({ padding: "10px 22px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 14, transition: "all 0.25s", background: active ? "linear-gradient(135deg, #0055bb, #007aaa)" : "transparent", color: active ? "#fff" : "#4a6fa5", boxShadow: active ? "0 4px 16px rgba(0,100,220,0.35)" : "none" }),
-    // Cards
-    card: { background: "rgba(8,20,46,0.8)", border: "1px solid rgba(0,180,255,0.12)", borderRadius: 16, padding: 28, marginBottom: 24 },
-    cardTitle: { fontSize: 17, fontWeight: 700, color: "#c8deff", marginBottom: 18 },
-    // Upload area
-    uploadArea: (dragging) => ({ border: `2px dashed ${dragging ? "#00b4ff" : "rgba(0,180,255,0.25)"}`, borderRadius: 16, padding: "48px 32px", textAlign: "center", cursor: "pointer", transition: "all 0.3s", background: dragging ? "rgba(0,120,255,0.08)" : "rgba(0,60,120,0.15)" }),
-    uploadIcon: { fontSize: 48, marginBottom: 12 },
-    uploadText: { color: "#4a8ac4", fontSize: 15, fontWeight: 500 },
-    // Result badge
-    badge: (risk) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, background: RISK_BG[risk] || "rgba(255,255,255,0.1)", border: `1px solid ${RISK_COLORS[risk] || "#fff"}40`, color: RISK_COLORS[risk] || "#fff", fontSize: 13, fontWeight: 700 }),
-    // Stats row
-    statRow: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 28 },
-    statCard: (color) => ({ background: `linear-gradient(135deg, rgba(${color},0.15), rgba(${color},0.05))`, border: `1px solid rgba(${color},0.25)`, borderRadius: 14, padding: "20px 22px" }),
-    statVal: { fontSize: 32, fontWeight: 800, color: "#fff" },
-    statLbl: { fontSize: 13, color: "#4a6fa5", marginTop: 4 },
-    // Report row
-    reportRow: { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,180,255,0.08)", borderRadius: 12, padding: "18px 22px", marginBottom: 12, cursor: "pointer", transition: "all 0.2s" },
-    // Patient list row  
-    patientRow: (sel) => ({ background: sel ? "rgba(0,120,255,0.12)" : "rgba(255,255,255,0.03)", border: sel ? "1px solid rgba(0,180,255,0.3)" : "1px solid rgba(0,180,255,0.08)", borderRadius: 12, padding: "16px 20px", marginBottom: 10, cursor: "pointer", transition: "all 0.2s" }),
-    // Scan result panel
-    resultPanel: { background: "linear-gradient(135deg, rgba(0,40,100,0.6), rgba(0,60,80,0.4))", border: "1px solid rgba(0,220,180,0.2)", borderRadius: 16, padding: 28 },
-    confidenceBar: (pct) => ({ height: 8, borderRadius: 4, background: `linear-gradient(90deg, #00b4ff ${pct}%, rgba(255,255,255,0.06) ${pct}%)` }),
-    // Retinal image display
-    retinalFrame: { width: "100%", maxWidth: 300, aspectRatio: "1", borderRadius: "50%", overflow: "hidden", border: "4px solid rgba(0,180,255,0.3)", boxShadow: "0 0 40px rgba(0,120,255,0.3)", margin: "0 auto", display: "block" },
-    // Message box
-    msgBox: { background: "rgba(5,15,35,0.8)", border: "1px solid rgba(0,180,255,0.15)", borderRadius: 12, padding: 20 },
-    msgInput: { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,180,255,0.2)", borderRadius: 10, padding: "12px 16px", color: "#e8eef8", fontSize: 14, resize: "vertical", minHeight: 80, boxSizing: "border-box", outline: "none", fontFamily: "inherit" },
-    sendBtn: { background: "linear-gradient(135deg, #0066cc, #00a3cc)", border: "none", borderRadius: 10, padding: "11px 24px", color: "#fff", fontWeight: 700, cursor: "pointer", marginTop: 10 },
-    msgBubble: { background: "rgba(0,80,180,0.2)", border: "1px solid rgba(0,180,255,0.15)", borderRadius: 12, padding: "12px 16px", marginBottom: 10 },
-    divider: { height: 1, background: "rgba(0,180,255,0.1)", margin: "24px 0" },
-    sectionLabel: { fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#3a5a8a", fontWeight: 700, marginBottom: 12 },
-    noData: { textAlign: "center", color: "#2a4a7a", padding: "40px 0", fontSize: 15 },
-    glow: { position: "absolute", borderRadius: "50%", filter: "blur(80px)", pointerEvents: "none" },
-  };
-
-  // ======= AUTH SCREEN =======
-  if (screen === "login") {
-    const isRegister = authMode === "register";
-    const inputRow = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
-    const selStyle = { ...S.input, marginBottom: 0, appearance: "none", WebkitAppearance: "none", background: "rgba(255,255,255,0.06)", cursor: "pointer" };
-
-    return (
-      <div style={S.loginWrap}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-          * { box-sizing: border-box; }
-          @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
-          @keyframes floatIn { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-          @keyframes fadeSlide { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-          .login-card { animation: floatIn 0.5s ease; }
-          .auth-form { animation: fadeSlide 0.35s ease; }
-          input:focus, select:focus { border-color: rgba(0,180,255,0.5) !important; box-shadow: 0 0 0 3px rgba(0,120,255,0.15) !important; }
-          .login-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,120,200,0.5) !important; }
-          .grid-bg { position:absolute; inset:0; background-image: linear-gradient(rgba(0,120,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,120,255,0.04) 1px, transparent 1px); background-size:50px 50px; }
-          .mode-tab { transition: all 0.25s; }
-          .mode-tab:hover { color: #7ab4df !important; }
-          select option { background: #0a1830; color: #e8eef8; }
-          .pass-wrap { position: relative; margin-bottom: 14px; }
-          .pass-wrap input { margin-bottom: 0 !important; padding-right: 44px !important; }
-          .pass-eye { position:absolute; right:14px; top:50%; transform:translateY(-50%); background:none; border:none; color:#4a6fa5; cursor:pointer; font-size:16px; padding:0; }
-          .pass-eye:hover { color: #7ab4df; }
-          .field-group { margin-bottom: 14px; }
-          .strength-bar { height:3px; border-radius:2px; margin-top:6px; transition: all 0.3s; }
-          .link-btn { background: none; border: none; color: #00b4ff; cursor: pointer; font-size: 14px; font-weight: 600; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-          .link-btn:hover { color: #00d4aa; }
-        `}</style>
-        <div className="grid-bg" />
-        <div style={{ ...S.glow, width: 500, height: 500, background: "rgba(0,80,200,0.12)", top: "-20%", left: "10%" }} />
-        <div style={{ ...S.glow, width: 400, height: 400, background: "rgba(0,180,150,0.08)", bottom: "-10%", right: "15%" }} />
-
-        <div style={{ ...S.loginCard, width: isRegister ? 500 : 420, transition: "width 0.3s ease" }} className="login-card">
-
-          {/* Logo */}
-          <div style={{ ...S.logo, marginBottom: 24 }}>
-            <div style={{ fontSize: 38, marginBottom: 6 }}>👁️</div>
-            <div style={S.logoTitle}>RetinaAI Portal</div>
-            <div style={S.logoSub}>Intelligent Retinal Analysis System</div>
-          </div>
-
-          {/* Mode toggle: Sign In / Register */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 4, marginBottom: 24, border: "1px solid rgba(0,180,255,0.1)" }}>
-            <button className="mode-tab" style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.25s", background: !isRegister ? "linear-gradient(135deg, #0055bb, #007aaa)" : "transparent", color: !isRegister ? "#fff" : "#3a5a8a", boxShadow: !isRegister ? "0 4px 14px rgba(0,100,220,0.35)" : "none" }} onClick={() => switchMode("signin")}>
-              Sign In
-            </button>
-            <button className="mode-tab" style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.25s", background: isRegister ? "linear-gradient(135deg, #0055bb, #007aaa)" : "transparent", color: isRegister ? "#fff" : "#3a5a8a", boxShadow: isRegister ? "0 4px 14px rgba(0,100,220,0.35)" : "none" }} onClick={() => switchMode("register")}>
-              Create Account
-            </button>
-          </div>
-
-          {/* Role selector */}
-          <div style={{ ...S.roleToggle, marginBottom: 20 }}>
-            <button style={S.roleBtn(loginRole === "patient")} onClick={() => switchRole("patient")}>🧑 Patient</button>
-            <button style={S.roleBtn(loginRole === "doctor")} onClick={() => switchRole("doctor")}>👨‍⚕️ Doctor</button>
-          </div>
-
-          {/* Alerts */}
-          {loginError && <div style={S.error}>⚠ {loginError}</div>}
-          {loginSuccess && <div style={{ background: "rgba(0,212,130,0.12)", border: "1px solid rgba(0,212,130,0.35)", borderRadius: 8, padding: "10px 14px", color: "#00e09a", fontSize: 13, marginBottom: 14 }}>✓ {loginSuccess}</div>}
-
-          {/* ── SIGN IN FORM ── */}
-          {!isRegister && (
-            <div className="auth-form">
-              <input style={S.input} type="email" placeholder="Email address" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-              <div className="pass-wrap">
-                <input style={{ ...S.input }} type={showPass ? "text" : "password"} placeholder="Password" value={loginPass} onChange={e => setLoginPass(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-                <button className="pass-eye" onClick={() => setShowPass(p => !p)}>{showPass ? "🙈" : "👁"}</button>
-              </div>
-              <button style={S.loginBtn} className="login-btn" onClick={handleLogin}>
-                Sign In as {loginRole === "patient" ? "Patient" : "Doctor"} →
-              </button>
-              <div style={S.hint}>
-                {loginRole === "patient" ? "Demo: sarah@email.com / patient123" : "Demo: dr.vasquez@clinic.com / doctor123"}
-              </div>
-              <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#3a5a8a" }}>
-                Don't have an account?{" "}
-                <button className="link-btn" onClick={() => switchMode("register")}>Create one</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── REGISTER FORM ── */}
-          {isRegister && (
-            <div className="auth-form">
-
-              {/* Name */}
-              <div className="field-group">
-                <input style={{ ...S.input, marginBottom: 0 }} type="text" placeholder="Full name *" value={regName} onChange={e => setRegName(e.target.value)} />
-              </div>
-
-              {/* Email + Phone */}
-              <div style={{ ...inputRow, marginBottom: 14 }}>
-                <input style={{ ...S.input, marginBottom: 0 }} type="email" placeholder="Email address *" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
-                <input style={{ ...S.input, marginBottom: 0 }} type="tel" placeholder="Phone number" value={regPhone} onChange={e => setRegPhone(e.target.value)} />
-              </div>
-
-              {/* Password + Confirm */}
-              <div style={{ ...inputRow, marginBottom: 0 }}>
-                <div className="pass-wrap" style={{ marginBottom: 0 }}>
-                  <input style={{ ...S.input, marginBottom: 0 }} type={showPass ? "text" : "password"} placeholder="Password * (min 6)" value={regPass} onChange={e => setRegPass(e.target.value)} />
-                  <button className="pass-eye" onClick={() => setShowPass(p => !p)}>{showPass ? "🙈" : "👁"}</button>
-                </div>
-                <input style={{ ...S.input, marginBottom: 0 }} type={showPass ? "text" : "password"} placeholder="Confirm password *" value={regConfirm} onChange={e => setRegConfirm(e.target.value)} />
-              </div>
-
-              {/* Password strength */}
-              {regPass.length > 0 && (
-                <div style={{ marginBottom: 14, marginTop: 6 }}>
-                  <div className="strength-bar" style={{ width: "100%", background: "rgba(255,255,255,0.06)" }}>
-                    <div className="strength-bar" style={{ width: regPass.length < 6 ? "25%" : regPass.length < 10 ? "60%" : "100%", background: regPass.length < 6 ? "#e84040" : regPass.length < 10 ? "#f5a623" : "#00d4aa", marginTop: 0 }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: regPass.length < 6 ? "#e84040" : regPass.length < 10 ? "#f5a623" : "#00d4aa", marginTop: 4 }}>
-                    {regPass.length < 6 ? "Weak" : regPass.length < 10 ? "Moderate" : "Strong"} password
-                  </div>
-                </div>
-              )}
-
-              {/* Patient-specific fields */}
-              {loginRole === "patient" && (
-                <div style={{ ...inputRow, marginBottom: 14 }}>
-                  <input style={{ ...S.input, marginBottom: 0 }} type="number" placeholder="Age *" min="1" max="120" value={regAge} onChange={e => setRegAge(e.target.value)} />
-                  <select style={selStyle} value={regGender} onChange={e => setRegGender(e.target.value)}>
-                    <option value="">Gender (optional)</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Doctor-specific fields */}
-              {loginRole === "doctor" && (
-                <>
-                  <div className="field-group">
-                    <input style={{ ...S.input, marginBottom: 0 }} type="text" placeholder="Specialization * (e.g. Ophthalmologist)" value={regSpecialization} onChange={e => setRegSpecialization(e.target.value)} />
-                  </div>
-                  <div style={{ ...inputRow, marginBottom: 14 }}>
-                    <input style={{ ...S.input, marginBottom: 0 }} type="text" placeholder="License number" value={regLicense} onChange={e => setRegLicense(e.target.value)} />
-                    <input style={{ ...S.input, marginBottom: 0 }} type="text" placeholder="Hospital / Clinic" value={regHospital} onChange={e => setRegHospital(e.target.value)} />
-                  </div>
-                </>
-              )}
-
-              <button style={{ ...S.loginBtn, marginTop: 6 }} className="login-btn" onClick={handleRegister}>
-                Create {loginRole === "patient" ? "Patient" : "Doctor"} Account →
-              </button>
-
-              <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#3a5a8a" }}>
-                Already have an account?{" "}
-                <button className="link-btn" onClick={() => switchMode("signin")}>Sign in</button>
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-    );
-  }
-
-  // ======= PATIENT DASHBOARD =======
+  // ══════════════════════════════════════════════════════════
+  //  PATIENT DASHBOARD
+  // ══════════════════════════════════════════════════════════
   if (screen === "patient") {
-    const updatedPatient = patients.find(p => p.id === currentUser.id) || currentUser;
+    const user        = patients.find(p => p.id === currentUser.id) || currentUser;
+    const sentReports = (user.reports || []).filter(r => r.sentByDoctor);
+    const myMsgs      = messages[user.id] || [];
 
     return (
-      <div style={S.dash}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-          * { box-sizing: border-box; }
-          @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
-          @keyframes spin { to{transform:rotate(360deg)} }
-          @keyframes slideIn { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
-          @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-          .fade-up { animation: fadeUp 0.4s ease; }
-          .report-row:hover { background: rgba(0,120,255,0.08) !important; border-color: rgba(0,180,255,0.2) !important; }
-          .upload-area:hover { border-color: rgba(0,180,255,0.5) !important; background: rgba(0,80,200,0.1) !important; }
-        `}</style>
-        <div style={S.header}>
-          <div style={S.headerLeft}>
-            <div style={S.pulse} />
-            <span style={S.headerTitle}>RetinaAI Portal</span>
-            <span style={{ fontSize: 12, color: "#2a5a8a", background: "rgba(0,100,200,0.15)", padding: "3px 10px", borderRadius: 20, fontWeight: 600 }}>Patient</span>
+      <div className="dashboard">
+        {/* Header */}
+        <header className="dash-header">
+          <div className="dash-header-left">
+            <div className="status-dot" />
+            <span className="dash-logo-text">RetinaAI Portal</span>
+            <span className="role-chip patient">Patient</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={S.userChip}>
-              <div style={S.avatar("linear-gradient(135deg, #0066cc, #00c4aa)")}>{updatedPatient.name[0]}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#c8deff" }}>{updatedPatient.name}</div>
-                <div style={{ fontSize: 11, color: "#3a5a8a" }}>ID: {updatedPatient.id}</div>
-              </div>
+          <div className="dash-header-right">
+            <div className="user-chip">
+              <div className="avatar patient">{user.name[0]}</div>
+              <div><div className="user-name">{user.name}</div><div className="user-id">ID: {user.id}</div></div>
             </div>
-            <button style={S.logoutBtn} onClick={logout}>Sign Out</button>
+            <button className="btn-logout" onClick={logout}>Sign Out</button>
           </div>
-        </div>
+        </header>
 
-        <div style={S.content}>
-          <div style={S.statRow}>
-            <div style={S.statCard("0,120,255")}>
-              <div style={S.statVal}>{updatedPatient.reports.length}</div>
-              <div style={S.statLbl}>Total Scans</div>
-            </div>
-            <div style={S.statCard("0,212,170")}>
-              <div style={S.statVal}>{updatedPatient.reports.filter(r => r.risk === "Low").length}</div>
-              <div style={S.statLbl}>Normal Results</div>
-            </div>
-            <div style={S.statCard("245,166,35")}>
-              <div style={S.statVal}>{updatedPatient.reports.filter(r => r.risk !== "Low").length}</div>
-              <div style={S.statLbl}>Flagged Results</div>
-            </div>
+        <main className="dash-content">
+          {/* Stats */}
+          <div className="stats-row">
+            <div className="stat-card blue">  <div className="stat-val">{sentReports.length}</div><div className="stat-lbl">Reports Received</div></div>
+            <div className="stat-card green"> <div className="stat-val">{sentReports.filter(r => r.risk === "Low").length}</div><div className="stat-lbl">Normal Results</div></div>
+            <div className="stat-card orange"><div className="stat-val">{sentReports.filter(r => r.risk !== "Low").length}</div><div className="stat-lbl">Needs Attention</div></div>
           </div>
 
-          <div style={S.tabs}>
-            {[["upload", "🔬 Upload & Analyze"], ["results", "📋 View Results"], ["history", "🗂️ History"]].map(([key, label]) => (
-              <button key={key} style={S.tab(patientTab === key)} onClick={() => setPatientTab(key)}>{label}</button>
+          {/* Tabs — NO upload tab */}
+          <div className="tab-bar">
+            {[["reports", "📋 My Reports"], ["messages", "💬 Messages"]].map(([k, l]) => (
+              <button key={k} className={`tab-btn${patientTab === k ? " active" : ""}`} onClick={() => setPatientTab(k)}>{l}</button>
             ))}
           </div>
 
-          {/* UPLOAD TAB */}
-          {patientTab === "upload" && (
+          {/* ── My Reports ── */}
+          {patientTab === "reports" && (
             <div className="fade-up">
-              <div style={S.card}>
-                <div style={S.cardTitle}>Upload Retinal Image</div>
-                <div style={S.uploadArea(false)} className="upload-area" onClick={() => fileRef.current.click()}>
-                  <div style={S.uploadIcon}>🔍</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#7ab4df", marginBottom: 8 }}>
-                    {uploadedImage ? "Image Selected ✓" : "Click to Upload Retinal Image"}
-                  </div>
-                  <div style={S.uploadText}>{uploadedImage ? "Ready for AI analysis" : "Supports JPG, PNG, DICOM formats"}</div>
-                  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
-                </div>
+              {sentReports.length === 0
+                ? <div className="card"><div className="no-data">No reports yet. Your doctor will send results here after reviewing your scan.</div></div>
+                : sentReports.map(r => (
+                  <div key={r.id} className="patient-report-card">
 
-                {uploadedImage && (
-                  <div style={{ marginTop: 24, textAlign: "center" }}>
-                    <img src={uploadedImage} style={S.retinalFrame} alt="Uploaded retinal scan" />
-                    <div style={{ marginTop: 20 }}>
-                      <button
-                        style={{ ...S.loginBtn, width: "auto", padding: "13px 40px", opacity: analyzing ? 0.7 : 1 }}
-                        onClick={runAnalysis}
-                        disabled={analyzing}
-                      >
-                        {analyzing ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }}>
-                            <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                            Analyzing with AI...
-                          </span>
-                        ) : "🧠 Run AI Analysis"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {analysisResult && (
-                <div style={S.resultPanel} className="fade-up">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-                    <div>
-                      <div style={S.sectionLabel}>AI Analysis Complete</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", marginBottom: 8 }}>{analysisResult.diagnosis}</div>
-                      <div style={S.badge(analysisResult.risk)}>● {analysisResult.risk} Risk</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={S.sectionLabel}>Confidence</div>
-                      <div style={{ fontSize: 36, fontWeight: 800, color: "#00d4aa" }}>{analysisResult.confidence}%</div>
-                    </div>
-                  </div>
-                  <div style={S.confidenceBar(analysisResult.confidence)} />
-                  <div style={S.divider} />
-                  <div style={S.sectionLabel}>Findings</div>
-                  <div style={{ color: "#8ab4d4", lineHeight: 1.7 }}>{analysisResult.findings}</div>
-                  {analysisResult.doctorNote && (
-                    <>
-                      <div style={S.divider} />
-                      <div style={S.sectionLabel}>Doctor's Note</div>
-                      <div style={{ color: "#7adccc", lineHeight: 1.7, fontStyle: "italic" }}>"{analysisResult.doctorNote}"</div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* RESULTS TAB */}
-          {patientTab === "results" && (
-            <div className="fade-up">
-              {updatedPatient.reports.length === 0 ? (
-                <div style={{ ...S.card, ...S.noData }}>No analysis results yet. Upload an image to get started.</div>
-              ) : (
-                updatedPatient.reports.slice(0, 1).map(r => (
-                  <div key={r.id}>
-                    <div style={S.card}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                        <div>
-                          <div style={S.sectionLabel}>Latest Analysis — {r.date}</div>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>{r.diagnosis}</div>
-                        </div>
-                        <div style={S.badge(r.risk)}>● {r.risk} Risk</div>
+                    {/* Report header */}
+                    <div className="pr-header">
+                      <div>
+                        <div className="pr-diagnosis">{r.diagnosis}</div>
+                        <div className="pr-stage">{r.stage !== "N/A" ? `Stage: ${r.stage}` : "No staging required"}</div>
+                        <div className="pr-date">{r.date}</div>
                       </div>
-                      {r.image && <img src={r.image} style={S.retinalFrame} alt="Retinal scan" />}
-                      <div style={{ marginTop: 24 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                          <span style={{ color: "#4a6fa5", fontSize: 13 }}>AI Confidence Score</span>
-                          <span style={{ color: "#00d4aa", fontWeight: 700 }}>{r.confidence}%</span>
-                        </div>
-                        <div style={S.confidenceBar(r.confidence)} />
-                      </div>
-                      <div style={S.divider} />
-                      <div style={S.sectionLabel}>Clinical Findings</div>
-                      <div style={{ color: "#8ab4d4", lineHeight: 1.7 }}>{r.findings}</div>
-                      {r.doctorNote && (
-                        <>
-                          <div style={S.divider} />
-                          <div style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)", borderRadius: 12, padding: 18 }}>
-                            <div style={S.sectionLabel}>Doctor's Note</div>
-                            <div style={{ color: "#7adccc", lineHeight: 1.7, fontStyle: "italic" }}>"{r.doctorNote}"</div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* HISTORY TAB */}
-          {patientTab === "history" && (
-            <div className="fade-up">
-              <div style={S.card}>
-                <div style={S.cardTitle}>All Previous Reports</div>
-                {updatedPatient.reports.length === 0 ? (
-                  <div style={S.noData}>No previous reports.</div>
-                ) : updatedPatient.reports.map((r, i) => (
-                  <div key={r.id} style={S.reportRow} className="report-row">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: RISK_BG[r.risk], border: `1px solid ${RISK_COLORS[r.risk]}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                          {r.risk === "Low" ? "✓" : r.risk === "High" ? "⚠" : "~"}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: "#c8deff", marginBottom: 3 }}>{r.diagnosis}</div>
-                          <div style={{ fontSize: 12, color: "#3a5a8a" }}>{r.date} · Report #{r.id}</div>
+                      <div className="pr-header-right">
+                        <span style={riskBadge(r.risk)}>● {r.risk} Risk</span>
+                        <div className="pr-conf-block">
+                          <div className="pr-conf-label">AI Confidence</div>
+                          <div className="pr-conf-val" style={{ color: confColor(r.confidence) }}>{r.confidence}%</div>
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={S.badge(r.risk)}>{r.risk}</div>
-                        <div style={{ color: "#00d4aa", fontWeight: 700, fontSize: 14 }}>{r.confidence}%</div>
-                      </div>
                     </div>
+
+                    {/* 3 images: original, edge detection, grad-cam */}
+                    {(r.originalImage || r.edgeImage || r.gradcamImage) && (
+                      <div className="pr-images">
+                        {r.originalImage && <div className="pr-img-box"><img src={r.originalImage} className="pr-img" alt="Original Scan" /><div className="pr-img-label">Original Scan</div></div>}
+                        {r.edgeImage     && <div className="pr-img-box"><img src={r.edgeImage}     className="pr-img pr-img-edge" alt="Edge Detection" /><div className="pr-img-label">Edge Detection</div></div>}
+                        {r.gradcamImage  && <div className="pr-img-box"><img src={r.gradcamImage}  className="pr-img" alt="Grad-CAM" /><div className="pr-img-label">Grad-CAM</div></div>}
+                      </div>
+                    )}
+
+                    {/* Confidence bar */}
+                    <div className="pr-conf-bar-wrap">
+                      <div className="flex-between" style={{ marginBottom: 6 }}>
+                        <span className="section-label" style={{ margin: 0 }}>Confidence Score</span>
+                        <span style={{ color: "#00d4aa", fontWeight: 700, fontSize: 13 }}>{r.confidence}%</span>
+                      </div>
+                      <div style={confBar(r.confidence)} />
+                    </div>
+
+                    <div className="divider" />
+                    <div className="section-label">AI Findings</div>
+                    <div className="findings-text">{r.findings}</div>
+
                     {r.doctorNote && (
-                      <div style={{ marginTop: 12, fontSize: 13, color: "#4a8a80", borderTop: "1px solid rgba(0,180,255,0.08)", paddingTop: 10 }}>
-                        👨‍⚕️ <em>{r.doctorNote}</em>
+                      <div className="doctor-note-box mt-16">
+                        <div className="section-label">👨‍⚕️ Doctor's Note</div>
+                        <div className="doctor-note-text">"{r.doctorNote}"</div>
+                      </div>
+                    )}
+                    {r.prescription && (
+                      <div className="prescription-box mt-12">
+                        <div className="rx-header-row"><span className="rx-icon">℞</span><span className="section-label" style={{ margin: 0 }}>Prescription</span></div>
+                        <div className="rx-text">{r.prescription}</div>
                       </div>
                     )}
                   </div>
-                ))}
+                ))
+              }
+            </div>
+          )}
+
+          {/* ── Messages ── */}
+          {patientTab === "messages" && (
+            <div className="fade-up">
+              <div className="card">
+                <div className="card-title">Messages from Doctor</div>
+                {myMsgs.length === 0
+                  ? <div className="no-data">No messages yet.</div>
+                  : myMsgs.map((m, i) => (
+                    <div key={i} className="msg-bubble doctor-msg">
+                      <div className="msg-bubble-meta">👨‍⚕️ Doctor · {m.time}</div>
+                      <div className="msg-bubble-text">{m.text}</div>
+                    </div>
+                  ))
+                }
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     );
   }
 
-  // ======= DOCTOR DASHBOARD =======
+  // ══════════════════════════════════════════════════════════
+  //  DOCTOR DASHBOARD
+  // ══════════════════════════════════════════════════════════
   if (screen === "doctor") {
-    const allPatients = patients;
-    const selPatient = selectedPatient ? allPatients.find(p => p.id === selectedPatient) : null;
+    const selP = selectedPid ? patients.find(p => p.id === selectedPid) : null;
 
     return (
-      <div style={S.dash}>
-        <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-          * { box-sizing: border-box; }
-          @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
-          @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-          .fade-up { animation: fadeUp 0.4s ease; }
-          .patient-row:hover { background: rgba(0,120,255,0.1) !important; }
-          .report-row:hover { background: rgba(0,120,255,0.08) !important; }
-        `}</style>
-        <div style={S.header}>
-          <div style={S.headerLeft}>
-            <div style={S.pulse} />
-            <span style={S.headerTitle}>RetinaAI Portal</span>
-            <span style={{ fontSize: 12, color: "#7adccc", background: "rgba(0,200,150,0.12)", padding: "3px 10px", borderRadius: 20, fontWeight: 600 }}>Doctor</span>
+      <div className="dashboard">
+        {/* Header */}
+        <header className="dash-header">
+          <div className="dash-header-left">
+            <div className="status-dot" />
+            <span className="dash-logo-text">RetinaAI Portal</span>
+            <span className="role-chip doctor">Doctor</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={S.userChip}>
-              <div style={S.avatar("linear-gradient(135deg, #006644, #00a878)")}>{currentUser.name[2]}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#c8deff" }}>{currentUser.name}</div>
-                <div style={{ fontSize: 11, color: "#3a5a8a" }}>{currentUser.specialization}</div>
-              </div>
+          <div className="dash-header-right">
+            <div className="user-chip">
+              <div className="avatar doctor">{currentUser.name[4]}</div>
+              <div><div className="user-name">{currentUser.name}</div><div className="user-id">{currentUser.specialization}</div></div>
             </div>
-            <button style={S.logoutBtn} onClick={logout}>Sign Out</button>
+            <button className="btn-logout" onClick={logout}>Sign Out</button>
           </div>
-        </div>
+        </header>
 
-        <div style={S.content}>
-          <div style={S.statRow}>
-            <div style={S.statCard("0,120,255")}>
-              <div style={S.statVal}>{allPatients.length}</div>
-              <div style={S.statLbl}>Total Patients</div>
-            </div>
-            <div style={S.statCard("0,212,170")}>
-              <div style={S.statVal}>{allPatients.reduce((a, p) => a + p.reports.length, 0)}</div>
-              <div style={S.statLbl}>Total Reports</div>
-            </div>
-            <div style={S.statCard("232,64,64")}>
-              <div style={S.statVal}>{allPatients.reduce((a, p) => a + p.reports.filter(r => r.risk === "High").length, 0)}</div>
-              <div style={S.statLbl}>High Risk Cases</div>
-            </div>
+        <main className="dash-content">
+          {/* Stats */}
+          <div className="stats-row">
+            <div className="stat-card blue"> <div className="stat-val">{patients.length}</div><div className="stat-lbl">Total Patients</div></div>
+            <div className="stat-card green"><div className="stat-val">{patients.reduce((a, p) => a + p.reports.length, 0)}</div><div className="stat-lbl">Reports Sent</div></div>
+            <div className="stat-card red">  <div className="stat-val">{patients.reduce((a, p) => a + p.reports.filter(r => r.risk === "High").length, 0)}</div><div className="stat-lbl">High Risk Cases</div></div>
           </div>
 
-          <div style={S.tabs}>
-            {[["patients", "👥 Patient Reports"], ["images", "🔬 Retinal Images"], ["message", "💬 Message Patient"]].map(([key, label]) => (
-              <button key={key} style={S.tab(doctorTab === key)} onClick={() => setDoctorTab(key)}>{label}</button>
+          {/* Tabs */}
+          <div className="tab-bar">
+            {[["patients", "👥 Patients"], ["analyze", "🔬 Analyze & Send"], ["message", "💬 Message"]].map(([k, l]) => (
+              <button key={k} className={`tab-btn${doctorTab === k ? " active" : ""}`} onClick={() => setDoctorTab(k)}>{l}</button>
             ))}
           </div>
 
-          {/* PATIENT REPORTS */}
+          {/* ── PATIENTS TAB ── */}
           {doctorTab === "patients" && (
-            <div className="fade-up" style={{ display: "grid", gridTemplateColumns: selPatient ? "1fr 1.5fr" : "1fr", gap: 24 }}>
+            <div className={`fade-up patient-grid${selP ? "" : " single"}`}>
+              {/* Patient list */}
               <div>
-                <div style={S.card}>
-                  <div style={S.cardTitle}>All Patients</div>
-                  {allPatients.map(p => (
-                    <div key={p.id} style={S.patientRow(selectedPatient === p.id)} className="patient-row"
-                      onClick={() => setSelectedPatient(selectedPatient === p.id ? null : p.id)}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={S.avatar("linear-gradient(135deg, #0044aa, #0088cc)")}>{p.name[0]}</div>
+                <div className="card">
+                  <div className="card-title">All Patients</div>
+                  {patients.map(p => (
+                    <div key={p.id} className={`patient-row${selectedPid === p.id ? " selected" : ""}`}
+                      onClick={() => setSelectedPid(selectedPid === p.id ? null : p.id)}>
+                      <div className="patient-row-inner">
+                        <div className="patient-avatar">{p.name[0]}</div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, color: "#c8deff" }}>{p.name}</div>
-                          <div style={{ fontSize: 12, color: "#3a5a8a" }}>Age {p.age} · {p.reports.length} reports</div>
+                          <div className="patient-name">{p.name}</div>
+                          <div className="patient-meta">Age {p.age} · {p.reports.length} report{p.reports.length !== 1 ? "s" : ""}</div>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                          {p.reports.some(r => r.risk === "High") && <span style={{ ...S.badge("High"), fontSize: 11, padding: "3px 10px" }}>High Risk</span>}
-                          {!p.reports.some(r => r.risk === "High") && p.reports.some(r => r.risk === "Moderate") && <span style={{ ...S.badge("Moderate"), fontSize: 11, padding: "3px 10px" }}>Moderate</span>}
-                          {p.reports.every(r => r.risk === "Low") && p.reports.length > 0 && <span style={{ ...S.badge("Low"), fontSize: 11, padding: "3px 10px" }}>Clear</span>}
+                        <div className="patient-badges">
+                          {p.reports.some(r => r.risk === "High")     && <span style={riskBadge("High", true)}>High Risk</span>}
+                          {!p.reports.some(r => r.risk === "High") && p.reports.some(r => r.risk === "Moderate") && <span style={riskBadge("Moderate", true)}>Moderate</span>}
+                          {p.reports.length > 0 && p.reports.every(r => r.risk === "Low") && <span style={riskBadge("Low", true)}>Clear</span>}
                         </div>
                       </div>
                     </div>
@@ -683,123 +359,236 @@ export default function App() {
                 </div>
               </div>
 
-              {selPatient && (
+              {/* Patient detail panel */}
+              {selP && (
                 <div>
-                  <div style={S.card}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                  <div className="card">
+                    <div className="patient-detail-header">
                       <div>
-                        <div style={S.cardTitle}>{selPatient.name}</div>
-                        <div style={{ fontSize: 13, color: "#3a5a8a" }}>ID: {selPatient.id} · Age {selPatient.age}</div>
+                        <div className="patient-detail-name">{selP.name}</div>
+                        <div className="patient-detail-meta">Age {selP.age} · {selP.email}</div>
                       </div>
-                      <div style={{ textAlign: "right", fontSize: 13, color: "#4a6fa5" }}>{selPatient.email}</div>
+                      <button className="btn-analyze-small" onClick={() => setDoctorTab("analyze")}>+ New Analysis</button>
                     </div>
-                    <div style={S.divider} />
-                    <div style={S.sectionLabel}>AI Predictions & Reports</div>
-                    {selPatient.reports.map(r => (
-                      <div key={r.id} style={{ ...S.reportRow, cursor: "default" }} className="report-row">
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                          <div style={{ fontWeight: 600, color: "#c8deff" }}>{r.diagnosis}</div>
-                          <div style={S.badge(r.risk)}>{r.risk}</div>
-                        </div>
-                        <div style={{ fontSize: 12, color: "#3a5a8a", marginBottom: 10 }}>{r.date} · {r.confidence}% confidence</div>
-                        <div style={S.confidenceBar(r.confidence)} />
-                        <div style={{ marginTop: 12, fontSize: 13, color: "#6a9abf", lineHeight: 1.6 }}>{r.findings}</div>
-                        {r.doctorNote && (
-                          <div style={{ marginTop: 10, fontSize: 13, color: "#5a9a8a", fontStyle: "italic", borderTop: "1px solid rgba(0,180,255,0.08)", paddingTop: 10 }}>
-                            👨‍⚕️ {r.doctorNote}
+                    <div className="divider" />
+                    <div className="section-label">Sent Reports</div>
+                    {selP.reports.length === 0
+                      ? <div className="no-data">No reports sent yet.</div>
+                      : selP.reports.map(r => (
+                        <div key={r.id} className="report-row" style={{ cursor: "default" }}>
+                          <div className="report-row-header">
+                            <div>
+                              <div className="report-diagnosis">{r.diagnosis}</div>
+                              <span className="stage-chip">{r.stage}</span>
+                            </div>
+                            <span style={riskBadge(r.risk)}>{r.risk}</span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="report-meta">{r.date}</div>
+
+                          {/* Confidence bar — visible on doctor portal */}
+                          <div className="doctor-conf-row">
+                            <span className="section-label" style={{ margin: 0 }}>Confidence</span>
+                            <div className="confidence-track-wrap">
+                              <div style={confBar(r.confidence)} />
+                            </div>
+                            <span className="conf-pct" style={{ color: confColor(r.confidence) }}>{r.confidence}%</span>
+                          </div>
+
+                          <div className="report-findings">{r.findings}</div>
+                          {r.doctorNote   && <div className="report-doctor-note">👨‍⚕️ {r.doctorNote}</div>}
+                          {r.prescription && <div className="report-rx">℞ {r.prescription}</div>}
+
+                          {/* Thumbnail previews */}
+                          {(r.originalImage || r.edgeImage || r.gradcamImage) && (
+                            <div className="report-thumbs">
+                              {r.originalImage && <img src={r.originalImage} className="report-thumb" title="Original Scan" alt="orig" />}
+                              {r.edgeImage     && <img src={r.edgeImage}     className="report-thumb thumb-edge" title="Edge Detection" alt="edge" />}
+                              {r.gradcamImage  && <img src={r.gradcamImage}  className="report-thumb" title="Grad-CAM" alt="gcam" />}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    }
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* RETINAL IMAGES */}
-          {doctorTab === "images" && (
+          {/* ── ANALYZE & SEND TAB ── */}
+          {doctorTab === "analyze" && (
             <div className="fade-up">
-              {allPatients.map(p => {
-                const imagesOnly = p.reports.filter(r => r.image);
-                if (imagesOnly.length === 0) return null;
-                return (
-                  <div key={p.id} style={S.card}>
-                    <div style={S.cardTitle}>{p.name} — Retinal Scans</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap: 20 }}>
-                      {imagesOnly.map(r => (
-                        <div key={r.id} style={{ textAlign: "center" }}>
-                          <img src={r.image} style={{ width: 140, height: 140, borderRadius: "50%", border: `3px solid ${RISK_COLORS[r.risk]}60`, boxShadow: `0 0 20px ${RISK_COLORS[r.risk]}30`, objectFit: "cover" }} alt="Retinal" />
-                          <div style={{ marginTop: 10, fontSize: 13, color: "#6a9abf" }}>{r.date}</div>
-                          <div style={{ marginTop: 4 }}><span style={S.badge(r.risk)}>{r.risk}</span></div>
-                          <div style={{ fontSize: 12, color: "#4a6fa5", marginTop: 6 }}>{r.diagnosis}</div>
-                        </div>
-                      ))}
+
+              {/* Step 1 — Select patient */}
+              <div className="card">
+                <div className="card-title">Step 1 — Select Patient</div>
+                <div className="msg-patient-pills">
+                  {patients.map(p => (
+                    <button key={p.id} className={`btn-pill${selectedPid === p.id ? " active" : ""}`}
+                      onClick={() => { setSelectedPid(p.id); resetAnalyze(); }}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                {!selectedPid && <div className="no-data" style={{ paddingTop: 16 }}>Select a patient to begin analysis.</div>}
+              </div>
+
+              {selectedPid && (
+                <>
+                  {/* Step 2 — Upload */}
+                  <div className="card">
+                    <div className="card-title">Step 2 — Upload Retinal Image</div>
+                    <div className="upload-area" onClick={() => fileRef.current.click()}>
+                      <div className="upload-icon">🔬</div>
+                      <div className="upload-title">{uploadedImg ? "Image Loaded ✓" : "Click to Upload Retinal Scan"}</div>
+                      <div className="upload-sub">JPG · PNG · Max 10 MB</div>
+                      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
                     </div>
+                    {uploadedImg && (
+                      <button className="btn-analyze" onClick={runAnalysis} disabled={analyzing}>
+                        {analyzing ? <><span className="spinner" />Running AI Analysis...</> : "🧠 Run Analysis"}
+                      </button>
+                    )}
                   </div>
-                );
-              })}
-              {allPatients.every(p => p.reports.every(r => !r.image)) && (
-                <div style={{ ...S.card, ...S.noData }}>No retinal images uploaded yet.</div>
+
+                  {/* Step 3 — AI Results */}
+                  {(uploadedImg && (analyzing || aiResult)) && (
+                    <div className="card">
+                      <div className="card-title">Step 3 — AI Analysis Results</div>
+
+                      {analyzing && (
+                        <div className="analyzing-state">
+                          <div className="analyzing-spinner" />
+                          <div className="analyzing-text">Running Laplacian Edge Detection &amp; Grad-CAM visualization...</div>
+                        </div>
+                      )}
+
+                      {!analyzing && aiResult && (
+                        <>
+                          {/* AI summary with confidence + stage */}
+                          <div className="ai-result-summary">
+                            <div className="ai-result-left">
+                              <div className="section-label">Diagnosis</div>
+                              <div className="ai-diagnosis">{aiResult.diagnosis}</div>
+                              <div className="ai-stage-badge">{aiResult.stage}</div>
+                              <span style={{ ...riskBadge(aiResult.risk), marginTop: 12, display: "inline-flex" }}>● {aiResult.risk} Risk</span>
+                            </div>
+                            <div className="ai-result-right">
+                              <div className="section-label">AI Confidence Score</div>
+                              <div className="ai-conf-big" style={{ color: confColor(aiResult.confidence) }}>{aiResult.confidence}%</div>
+                              <div className="confidence-track" style={{ width: 160, marginTop: 10 }}>
+                                <div style={{ height: "100%", borderRadius: 4, width: `${aiResult.confidence}%`, background: aiResult.confidence >= 90 ? "#00d4aa" : aiResult.confidence >= 70 ? "linear-gradient(90deg,#f5a623,#ffd166)" : "linear-gradient(90deg,#e84040,#ff6b6b)" }} />
+                              </div>
+                              <div className="ai-conf-label" style={{ color: confColor(aiResult.confidence), marginTop: 6 }}>
+                                {aiResult.confidence >= 90 ? "High Confidence" : aiResult.confidence >= 70 ? "Moderate Confidence" : "Low Confidence"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="divider" />
+
+                          {/* Visual tabs: Original | Laplacian Edge | Grad-CAM */}
+                          <div className="section-label">Visual Analysis</div>
+                          <div className="viz-tabs">
+                            {[["original", "🖼 Original"], ["edge", "📐 Laplacian Edge"], ["gradcam", "🔥 Grad-CAM"]].map(([k, l]) => (
+                              <button key={k} className={`viz-tab${vizTab === k ? " active" : ""}`} onClick={() => setVizTab(k)}>{l}</button>
+                            ))}
+                          </div>
+                          <div className="viz-panel">
+                            {vizTab === "original" && uploadedImg  && <img src={uploadedImg}  className="viz-image" alt="Original" />}
+                            {vizTab === "edge"     && edgeImg      && <img src={edgeImg}      className="viz-image viz-edge" alt="Edge" />}
+                            {vizTab === "gradcam"  && gradcamImg   && <img src={gradcamImg}   className="viz-image" alt="Grad-CAM" />}
+                            {vizTab === "edge"    && <div className="viz-caption">Laplacian edge detection — highlights retinal vessel boundaries and lesion borders</div>}
+                            {vizTab === "gradcam" && <div className="viz-caption">Grad-CAM activation map — red regions are most influential to the AI diagnosis</div>}
+                          </div>
+
+                          <div className="divider" />
+                          <div className="section-label">AI Findings</div>
+                          <div className="findings-text">{aiResult.findings}</div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4 — Note + Prescription + Send */}
+                  {!analyzing && aiResult && (
+                    <div className="card">
+                      <div className="card-title">Step 4 — Add Note &amp; Send to Patient</div>
+                      <div className="form-field">
+                        <div className="section-label">Doctor's Note *</div>
+                        <textarea className="msg-textarea" placeholder="Clinical assessment, recommendations, follow-up instructions..."
+                          value={doctorNote} onChange={e => setDoctorNote(e.target.value)} style={{ minHeight: 90 }} />
+                      </div>
+                      <div className="form-field mt-12">
+                        <div className="section-label">Prescription (optional)</div>
+                        <textarea className="msg-textarea rx-textarea" placeholder="e.g. Timolol 0.5% eye drops twice daily. Follow-up in 6 weeks..."
+                          value={prescription} onChange={e => setPrescription(e.target.value)} style={{ minHeight: 70 }} />
+                      </div>
+
+                      {!reportSent ? (
+                        <button className="btn-send-report" onClick={sendReportToPatient} disabled={sendingReport || !doctorNote.trim()}>
+                          {sendingReport ? <><span className="spinner" />Sending...</> : "📤 Send Report & Prescription to Patient"}
+                        </button>
+                      ) : (
+                        <div className="report-sent-confirm">
+                          <span>✓</span> Report sent to {selP?.name}!
+                          <button className="link-btn" style={{ marginLeft: 12 }} onClick={resetAnalyze}>New Analysis</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
-          {/* MESSAGE PATIENT */}
+          {/* ── MESSAGE TAB ── */}
           {doctorTab === "message" && (
             <div className="fade-up">
-              <div style={S.card}>
-                <div style={S.cardTitle}>Message a Patient</div>
+              <div className="card">
+                <div className="card-title">Message a Patient</div>
                 <div style={{ marginBottom: 20 }}>
-                  <div style={S.sectionLabel}>Select Patient</div>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {allPatients.map(p => (
-                      <button key={p.id}
-                        style={{ ...S.tab(selectedPatient === p.id), padding: "8px 18px" }}
-                        onClick={() => { setSelectedPatient(p.id); setMessageSent(false); }}>
+                  <div className="section-label">Select Patient</div>
+                  <div className="msg-patient-pills">
+                    {patients.map(p => (
+                      <button key={p.id} className={`btn-pill${selectedPid === p.id ? " active" : ""}`}
+                        onClick={() => { setSelectedPid(p.id); setMsgSent(false); }}>
                         {p.name}
                       </button>
                     ))}
                   </div>
                 </div>
-
-                {selectedPatient && (
-                  <div>
-                    {(messages[selectedPatient] || []).length > 0 && (
-                      <div style={{ marginBottom: 20 }}>
-                        <div style={S.sectionLabel}>Sent Messages</div>
-                        {(messages[selectedPatient] || []).map((m, i) => (
-                          <div key={i} style={S.msgBubble}>
-                            <div style={{ fontSize: 12, color: "#3a5a8a", marginBottom: 4 }}>You · {m.time}</div>
-                            <div style={{ color: "#c8deff" }}>{m.text}</div>
+                {!selectedPid && <div className="no-data">Select a patient to start messaging.</div>}
+                {selectedPid && (
+                  <>
+                    {(messages[selectedPid] || []).length > 0 && (
+                      <>
+                        <div className="section-label">Sent Messages</div>
+                        {(messages[selectedPid] || []).map((m, i) => (
+                          <div key={i} className="msg-bubble doctor-msg">
+                            <div className="msg-bubble-meta">You · {m.time}</div>
+                            <div className="msg-bubble-text">{m.text}</div>
                           </div>
                         ))}
-                        <div style={S.divider} />
-                      </div>
+                        <div className="divider" />
+                      </>
                     )}
-                    <div style={S.sectionLabel}>New Message to {allPatients.find(p => p.id === selectedPatient)?.name}</div>
-                    <div style={S.msgBox}>
-                      <textarea
-                        style={S.msgInput}
-                        placeholder="Type your message, treatment recommendation, or follow-up instructions..."
-                        value={messageText}
-                        onChange={e => setMessageText(e.target.value)}
-                      />
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <button style={S.sendBtn} onClick={() => sendMessage(selectedPatient)}>Send Message →</button>
-                        {messageSent && <span style={{ color: "#00d4aa", fontSize: 14, fontWeight: 600 }}>✓ Message sent!</span>}
+                    <div className="section-label">New Message to {patients.find(p => p.id === selectedPid)?.name}</div>
+                    <div className="msg-box">
+                      <textarea className="msg-textarea" placeholder="Type your message, treatment note, or follow-up instruction..."
+                        value={msgText} onChange={e => setMsgText(e.target.value)} />
+                      <div className="msg-actions">
+                        <button className="btn-send" onClick={() => sendMessage(selectedPid)}>Send Message →</button>
+                        {msgSent && <span className="msg-sent-confirm">✓ Sent!</span>}
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {!selectedPatient && (
-                  <div style={S.noData}>Select a patient above to send a message.</div>
+                  </>
                 )}
               </div>
             </div>
           )}
-        </div>
+
+        </main>
       </div>
     );
   }
